@@ -11,31 +11,45 @@ import { searchSchemaHandler } from '../../src/tools/searchSchema.js';
 import { switchDatabaseHandler } from '../../src/tools/switchDatabase.js';
 
 describe('pg-inspector Integration Tests', () => {
-  // Explicitly point to the Docker Compose test database
   const testDbUrl = 'postgresql://test_user:test_password@localhost:5433/test_db';
   const testAlias = 'integration_test_db';
   let sql: postgres.Sql;
 
   beforeAll(async () => {
-    // 1. Connect to the clean test database
-    sql = postgres(testDbUrl);
+    try {
+      // 1. Connect to the clean test database
+      sql = postgres(testDbUrl, { 
+        max: 1, 
+        connect_timeout: 10 // Fail fast if Docker isn't ready
+      });
 
-    // 2. Seed it with a predictable, isolated schema for testing
-    await sql`CREATE TABLE test_users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)`;
-    await sql`CREATE TABLE test_orders (id SERIAL PRIMARY KEY, user_id INT REFERENCES test_users(id), total NUMERIC)`;
-    await sql`INSERT INTO test_users (name, email) VALUES ('Alice', 'alice@test.com')`;
-    await sql`INSERT INTO test_orders (user_id, total) VALUES (1, 99.99)`;
-    await sql`CREATE INDEX idx_test_users_email ON test_users(email)`;
+      // 2. Wait for DB to be ready (critical for CI Docker startup)
+      await sql`SELECT 1`;
 
-    // 3. Register it in the ConnectionManager for the tools to use
-    dbManager.addConnection(testAlias, testDbUrl);
-  });
+      // 3. Seed it with a predictable, isolated schema for testing
+      await sql`CREATE TABLE test_users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)`;
+      await sql`CREATE TABLE test_orders (id SERIAL PRIMARY KEY, user_id INT REFERENCES test_users(id), total NUMERIC)`;
+      await sql`INSERT INTO test_users (name, email) VALUES ('Alice', 'alice@test.com')`;
+      await sql`INSERT INTO test_orders (user_id, total) VALUES (1, 99.99)`;
+      await sql`CREATE INDEX idx_test_users_email ON test_users(email)`;
+
+      // 4. Register it in the ConnectionManager for the tools to use
+      dbManager.addConnection(testAlias, testDbUrl);
+    } catch (error) {
+      console.error("FATAL: beforeAll setup failed:", error);
+      throw error; // Force Vitest to show the real error instead of skipping
+    }
+  }, 30000); // Give Docker 30 seconds to start and be ready
 
   afterAll(async () => {
-    // 4. Clean up: Drop the tables so the next test run starts fresh
-    await sql`DROP TABLE IF EXISTS test_orders CASCADE`;
-    await sql`DROP TABLE IF EXISTS test_users CASCADE`;
-    await sql.end();
+    try {
+      // 5. Clean up: Drop the tables so the next test run starts fresh
+      await sql`DROP TABLE IF EXISTS test_orders CASCADE`;
+      await sql`DROP TABLE IF EXISTS test_users CASCADE`;
+      await sql.end();
+    } catch (error) {
+      console.error("Warning: afterAll cleanup failed:", error);
+    }
   });
 
   it('should return pong from the ping handler', async () => {
@@ -59,6 +73,12 @@ describe('pg-inspector Integration Tests', () => {
       schema_name: 'public',
       alias: testAlias
     });
+    
+    // If the handler returned an error, parse it to show a better test failure message
+    if (result.isError) {
+      throw new Error(result.content[0].text);
+    }
+    
     const description = JSON.parse(result.content[0].text);
 
     expect(description.columns).toHaveLength(3);
@@ -80,6 +100,8 @@ describe('pg-inspector Integration Tests', () => {
 
   it('should report the foreign key in the database overview handler', async () => {
     const result = await getDatabaseOverviewHandler({ alias: testAlias });
+    if (result.isError) throw new Error(result.content[0].text);
+    
     const overview = JSON.parse(result.content[0].text);
     const orders = overview.schema.find((table: any) => table.table === 'test_orders');
 
@@ -91,6 +113,8 @@ describe('pg-inspector Integration Tests', () => {
 
   it('should find matching tables and columns through the search handler', async () => {
     const result = await searchSchemaHandler({ search_term: 'email', alias: testAlias });
+    if (result.isError) throw new Error(result.content[0].text);
+    
     expect(result.content[0].text).toContain('"table": "test_users"');
     expect(result.content[0].text).toContain('"name": "email"');
   });
@@ -100,6 +124,7 @@ describe('pg-inspector Integration Tests', () => {
       query: 'SELECT name, email FROM test_users',
       alias: testAlias
     });
+    if (result.isError) throw new Error(result.content[0].text);
 
     expect(JSON.parse(result.content[0].text)).toEqual([
       { name: 'Alice', email: 'alice@test.com' }
@@ -121,6 +146,7 @@ describe('pg-inspector Integration Tests', () => {
       query: 'SELECT * FROM test_users',
       alias: testAlias
     });
+    if (result.isError) throw new Error(result.content[0].text);
 
     expect(result.content[0].text).toContain('Query Plan:');
     expect(result.content[0].text).toContain('estimated plan');
