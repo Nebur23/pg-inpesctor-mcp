@@ -32,8 +32,9 @@ Add this to your `.vscode/mcp.json`:
 {
   "servers": {
     "pg-inspector": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-p", "@neb23x/pg-inspector-mcp@latest", "pg-inspector-server"]
+      "args": ["-y", "-p", "@neb23x/pg-inspector-mcp@latest", "pg-inspector-server"]
     }
   }
 }
@@ -45,8 +46,9 @@ Add this to your host's MCP configuration file:
 {
   "mcpServers": {
     "pg-inspector": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-p", "@neb23x/pg-inspector-mcp@latest", "pg-inspector-server"]
+      "args": ["-y", "-p", "@neb23x/pg-inspector-mcp@latest", "pg-inspector-server"]
     }
   }
 }
@@ -80,6 +82,9 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_reader;
 1. Clone the repo and run `npm install`.
 2. Add your local database to the CLI: `npx tsx src/cli.ts`.
 3. Run the integration tests (requires Docker): `npm run test`.
+4. Before publishing, follow the [npm release skill](.github/skills/npm-release/SKILL.md) and update the [release history](CHANGELOG.md).
+
+The `-y` option tells `npx` to install the requested package without an interactive confirmation prompt. This is important for MCP hosts, which launch servers non-interactively.
 
 ## License
 MIT

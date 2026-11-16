@@ -1,15 +1,15 @@
 {
   "name": "@neb23x/pg-inspector-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A secure, host-agnostic MCP server for PostgreSQL.",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "pg-inspector-mcp": "./dist/cli.js",
-    "pg-inspector-server": "./dist/index.js"
+    "pg-inspector-mcp": "dist/cli.js",
+    "pg-inspector-server": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js dist/cli.js",
+    "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d",
     "test:db:down": "docker compose -f docker-compose.test.yml down",
@@ -25,7 +25,7 @@
     "cli"
   ],
   "author": "neb23x",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server": "^2.4.0",
     "postgres": "^4.1.1",
